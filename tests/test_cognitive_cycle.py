@@ -33,7 +33,7 @@ def test_full_cycle_perceives_teammates_within_fov_only_criterio_1():
     assert "p3" not in perceived_ids  # behind observer, outside 100 deg FOV
 
 
-def test_full_cycle_produces_at_least_three_distinct_utilities_criterio_2():
+def test_full_cycle_produces_distinct_utilities_criterio_2():
     state = _four_player_scenario()
     passer = state.players[0]
 

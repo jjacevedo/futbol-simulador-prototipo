@@ -15,9 +15,9 @@ def select_alternative(
     if not evaluated:
         return None
 
-    ranked = sorted(evaluated, key=lambda e: e.utility_normalized, reverse=True)
+    ranked = sorted(evaluated, key=lambda e: e.utility_raw, reverse=True)
     best = ranked[0]
-    contenders = [e for e in ranked if best.utility_normalized - e.utility_normalized <= TIE_MARGIN]
+    contenders = [e for e in ranked if best.utility_raw - e.utility_raw <= TIE_MARGIN]
 
     if len(contenders) == 1:
         return best

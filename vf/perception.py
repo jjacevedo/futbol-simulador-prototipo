@@ -25,6 +25,10 @@ def _angular_difference(a: float, b: float) -> float:
 
 
 def is_visible(observer: Player, target_position: Tuple[float, float]) -> bool:
+    # Deliberate simplification: no occlusion modeling. Data Bible Vol VII
+    # lists occlusion as a perception factor, but this prototype's Criterio
+    # de Exito 1 only requires distance + angle correctness; occlusion is
+    # deferred to a future prototype.
     dx = target_position[0] - observer.position[0]
     dy = target_position[1] - observer.position[1]
     distance = math.hypot(dx, dy)

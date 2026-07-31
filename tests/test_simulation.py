@@ -20,6 +20,9 @@ def test_run_one_possession_returns_full_log_when_alternatives_exist():
     assert "target_player_id" in log
     assert "success" in log
     assert "utility_normalized" in log
+    assert "alternatives_considered" in log
+    assert len(log["alternatives_considered"]) >= 1
+    assert "weights" in log
 
 
 def test_run_one_possession_is_reproducible_under_same_seed():
