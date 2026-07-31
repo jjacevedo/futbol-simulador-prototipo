@@ -36,3 +36,17 @@ def test_no_alternatives_without_pasar_balon_goal():
     alts = generate_pass_alternatives(_observer(), perceived, goals=[])
 
     assert alts == []
+
+
+def test_excludes_observer_from_alternatives():
+    observer = _observer()
+    perceived = [
+        PerceivedEntity(id="p1", team="A", position=(0.0, 0.0), distance=0.0),  # observer
+        PerceivedEntity(id="p2", team="A", position=(10.0, 0.0), distance=10.0),
+    ]
+    goals = [Goal(type="PASAR_BALON", priority=1.0)]
+
+    alts = generate_pass_alternatives(observer, perceived, goals)
+
+    assert {a.target_player_id for a in alts} == {"p2"}
+    assert not any(a.target_player_id == "p1" for a in alts)

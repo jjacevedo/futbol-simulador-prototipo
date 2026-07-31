@@ -22,6 +22,8 @@ def generate_pass_alternatives(
 
     alternatives = []
     for entity in perceived:
+        if entity.id == observer.id:
+            continue
         if entity.team != observer.team:
             continue
         distance = math.hypot(
