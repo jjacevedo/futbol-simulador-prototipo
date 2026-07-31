@@ -1,6 +1,6 @@
 import random
 
-from vf.entities import Attributes, Ball, MatchState, Player
+from vf.entities import Attributes, Ball, MatchState, Personality, Player
 from vf.cognitive_cycle import run_cognitive_cycle
 
 
@@ -51,6 +51,42 @@ def test_full_cycle_selection_reproducible_under_same_seed_criterio_3():
 
     result_a = run_cognitive_cycle(state_a.players[0], state_a, random.Random(state_a.seed))
     result_b = run_cognitive_cycle(state_b.players[0], state_b, random.Random(state_b.seed))
+
+    assert result_a.chosen.alternative.target_player_id == result_b.chosen.alternative.target_player_id
+
+
+def _near_tie_scenario():
+    # Two teammates symmetric across the passer's facing axis, both unmarked
+    # (no rival present at all) -> identical forward_gain, identical
+    # rival_distance (None), hence identical utility_raw/utility_normalized.
+    # This lands the gap at 0.0, well within selection.TIE_MARGIN (0.05), so
+    # select_alternative must take the weighted-draw branch (2 contenders)
+    # and actually call rng.random() rather than the len(contenders) == 1
+    # fast path used by the other seed-reproducibility test above.
+    creative_personality = Personality(creatividad=0.9)
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(),
+                     personality=creative_personality, facing_rad=0.0, has_ball=True)
+    left_forward = Player(id="p2", team="A", position=(8.0, 2.0), attributes=_attrs())
+    right_forward = Player(id="p4", team="A", position=(8.0, -2.0), attributes=_attrs())
+
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    return MatchState(players=[passer, left_forward, right_forward], ball=ball, tick=0, seed=7)
+
+
+def test_full_cycle_near_tie_selection_reproducible_under_same_seed():
+    state_a = _near_tie_scenario()
+    state_b = _near_tie_scenario()
+
+    result_a = run_cognitive_cycle(state_a.players[0], state_a, random.Random(state_a.seed))
+    result_b = run_cognitive_cycle(state_b.players[0], state_b, random.Random(state_b.seed))
+
+    # Sanity check: confirm this scenario actually produces a near-tie (gap
+    # <= TIE_MARGIN) rather than a clear winner, so select_alternative is
+    # exercised via its RNG-dependent weighted-draw branch, not the trivial
+    # single-contender fast path.
+    utility_by_target = {e.alternative.target_player_id: e.utility_normalized for e in result_a.evaluated}
+    gap = abs(utility_by_target["p2"] - utility_by_target["p4"])
+    assert gap <= 0.05
 
     assert result_a.chosen.alternative.target_player_id == result_b.chosen.alternative.target_player_id
 
