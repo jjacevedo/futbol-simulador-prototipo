@@ -12,6 +12,9 @@ PRESSURE_X0 = 3.0
 PRESSURE_K = 1.5
 PROB_X0 = 0.0
 PROB_K = 6.0
+SKILL_DIVISOR = 400.0  # 4 attributes, each 0..100, normalized to 0..1
+DISTANCE_WEIGHT = 0.5
+PRESSURE_WEIGHT = 0.5
 
 
 def score_linear(x: float, lo: float, hi: float) -> float:
@@ -32,7 +35,7 @@ def compute_pass_success_probability(
         + passer_attrs.vision
         + passer_attrs.decision
         + passer_attrs.posicionamiento_promedio
-    ) / 400.0  # each attribute 0..100, four attributes -> 0..1
+    ) / SKILL_DIVISOR
 
     distance_score = score_linear(distance_m, 0.0, MAX_PASS_DISTANCE)
 
@@ -41,7 +44,7 @@ def compute_pass_success_probability(
     else:
         pressure_score = 1.0 - score_sigmoid(rival_distance_to_receiver, PRESSURE_X0, PRESSURE_K)
 
-    net_advantage = skill - 0.5 * distance_score - 0.5 * pressure_score
+    net_advantage = skill - DISTANCE_WEIGHT * distance_score - PRESSURE_WEIGHT * pressure_score
     return score_sigmoid(net_advantage, PROB_X0, PROB_K)
 
 
