@@ -59,6 +59,7 @@ def run_one_possession(state: MatchState, rng: random.Random) -> Optional[Dict]:
     log["alternatives_considered"] = [
         {
             "target_player_id": e.alternative.target_player_id,
+            "distance": e.alternative.distance,
             "score_beneficio": e.score_beneficio,
             "score_seguridad": e.score_seguridad,
             "score_prob_exito": e.score_prob_exito,
@@ -73,5 +74,20 @@ def run_one_possession(state: MatchState, rng: random.Random) -> Optional[Dict]:
         "W_VIABILIDAD": W_VIABILIDAD,
         "TIE_MARGIN": TIE_MARGIN,
     }
+
+    # near_tie: was the chosen alternative within TIE_MARGIN (raw utility) of
+    # the best alternative that wasn't chosen? Lets a human reviewer see when
+    # personality (creatividad), not a clear utility gap, decided the pass.
+    chosen = result.chosen
+    runner_up_candidates = [
+        e for e in result.evaluated if e.alternative.target_player_id != chosen.alternative.target_player_id
+    ]
+    if runner_up_candidates:
+        runner_up = max(runner_up_candidates, key=lambda e: e.utility_raw)
+        log["near_tie"] = abs(chosen.utility_raw - runner_up.utility_raw) <= TIE_MARGIN
+        if log["near_tie"]:
+            log["runner_up_target_id"] = runner_up.alternative.target_player_id
+    else:
+        log["near_tie"] = False
 
     return log
