@@ -5,6 +5,7 @@ from typing import List, Tuple
 from vf.entities import Player
 from vf.goals import Goal
 from vf.perception import PerceivedEntity
+from vf.physics import CONDUCCION_STEP_DISTANCE, conduccion_step_target
 
 
 @dataclass
@@ -33,5 +34,34 @@ def generate_pass_alternatives(
         alternatives.append(
             PassAlternative(target_player_id=entity.id, target_position=entity.position,
                              distance=distance)
+        )
+    return alternatives
+
+
+# 8 compass directions relative to the attack axis (+x = 0deg). Invented —
+# neither Bible gives a mechanism for choosing conducción direction; user
+# confirmed evaluating multiple candidates through Utility AI over a single
+# heuristic vector. See docs/decisions.md.
+CONDUCCION_DIRECTIONS_DEG = [0, 45, -45, 90, -90, 135, -135, 180]
+
+
+@dataclass
+class ConduccionAlternative:
+    direction: Tuple[float, float]
+    target_position: Tuple[float, float]
+    distance: float
+
+
+def generate_conduccion_alternatives(observer: Player, goals: List[Goal]) -> List[ConduccionAlternative]:
+    if not any(g.type == "PASAR_BALON" for g in goals):
+        return []
+
+    alternatives = []
+    for deg in CONDUCCION_DIRECTIONS_DEG:
+        rad = math.radians(deg)
+        direction = (math.cos(rad), math.sin(rad))
+        target = conduccion_step_target(observer.position, direction)
+        alternatives.append(
+            ConduccionAlternative(direction=direction, target_position=target, distance=CONDUCCION_STEP_DISTANCE)
         )
     return alternatives

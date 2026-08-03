@@ -1,9 +1,10 @@
 import math
 
-from vf.alternatives import generate_pass_alternatives
+from vf.alternatives import ConduccionAlternative, generate_conduccion_alternatives, generate_pass_alternatives
 from vf.entities import Attributes, Player
 from vf.goals import Goal
 from vf.perception import PerceivedEntity
+from vf.physics import CONDUCCION_STEP_DISTANCE
 
 
 def _attrs():
@@ -50,3 +51,36 @@ def test_excludes_observer_from_alternatives():
 
     assert {a.target_player_id for a in alts} == {"p2"}
     assert not any(a.target_player_id == "p1" for a in alts)
+
+
+def test_generates_eight_conduccion_directions_when_goal_present():
+    observer = _observer()
+    goals = [Goal(type="PASAR_BALON", priority=1.0)]
+
+    alts = generate_conduccion_alternatives(observer, goals)
+
+    assert len(alts) == 8
+    for alt in alts:
+        assert math.isclose(alt.distance, CONDUCCION_STEP_DISTANCE)
+        # direction is a unit vector
+        assert math.isclose(math.hypot(*alt.direction), 1.0, abs_tol=1e-6)
+
+
+def test_forward_direction_targets_positive_x_from_observer():
+    observer = _observer()  # at (0.0, 0.0)
+    goals = [Goal(type="PASAR_BALON", priority=1.0)]
+
+    alts = generate_conduccion_alternatives(observer, goals)
+    forward = next(a for a in alts if math.isclose(a.direction[0], 1.0, abs_tol=1e-6)
+                   and math.isclose(a.direction[1], 0.0, abs_tol=1e-6))
+
+    assert math.isclose(forward.target_position[0], CONDUCCION_STEP_DISTANCE)
+    assert math.isclose(forward.target_position[1], 0.0, abs_tol=1e-6)
+
+
+def test_no_conduccion_alternatives_without_pasar_balon_goal():
+    observer = _observer()
+
+    alts = generate_conduccion_alternatives(observer, goals=[])
+
+    assert alts == []
