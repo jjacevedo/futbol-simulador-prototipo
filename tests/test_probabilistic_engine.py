@@ -1,7 +1,12 @@
 import random
 
 from vf.entities import Attributes
-from vf.probabilistic_engine import compute_pass_success_probability, resolve_pass
+from vf.probabilistic_engine import (
+    compute_conduccion_maintain_probability,
+    compute_control_success_probability,
+    compute_pass_success_probability,
+    resolve_pass,
+)
 
 
 def _attrs(pase_corto):
@@ -51,3 +56,39 @@ def test_better_pase_corto_fails_less_on_average_criterio_4():
     # neither is guaranteed: both must show some failures over n trials
     assert weak_successes < n
     assert strong_successes < n
+
+
+def _receiver_attrs(control_balon=70, primer_toque=70):
+    return Attributes(pase_corto=50, vision=50, decision=50,
+                       posicionamiento_ofensivo=50, posicionamiento_defensivo=50,
+                       control_balon=control_balon, primer_toque=primer_toque)
+
+
+def test_higher_control_attributes_yield_higher_control_probability():
+    weak = compute_control_success_probability(_receiver_attrs(30, 30), rival_distance_to_receiver=None)
+    strong = compute_control_success_probability(_receiver_attrs(90, 90), rival_distance_to_receiver=None)
+    assert strong > weak
+
+
+def test_nearby_rival_lowers_control_probability():
+    unmarked = compute_control_success_probability(_receiver_attrs(), rival_distance_to_receiver=15.0)
+    marked = compute_control_success_probability(_receiver_attrs(), rival_distance_to_receiver=1.0)
+    assert unmarked > marked
+
+
+def _carrier_attrs(conduccion=70):
+    return Attributes(pase_corto=50, vision=50, decision=50,
+                       posicionamiento_ofensivo=50, posicionamiento_defensivo=50,
+                       conduccion=conduccion)
+
+
+def test_higher_conduccion_attribute_yields_higher_maintain_probability():
+    weak = compute_conduccion_maintain_probability(_carrier_attrs(30), rival_distance=None)
+    strong = compute_conduccion_maintain_probability(_carrier_attrs(90), rival_distance=None)
+    assert strong > weak
+
+
+def test_nearby_rival_lowers_conduccion_maintain_probability():
+    open_space = compute_conduccion_maintain_probability(_carrier_attrs(), rival_distance=15.0)
+    pressured = compute_conduccion_maintain_probability(_carrier_attrs(), rival_distance=1.0)
+    assert open_space > pressured

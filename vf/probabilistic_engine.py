@@ -50,3 +50,40 @@ def compute_pass_success_probability(
 
 def resolve_pass(rng: random.Random, probability: float) -> bool:
     return rng.random() < probability
+
+
+# Control/Recepcion and Conduccion formulas — same sigmoid-on-(skill-vs-pressure)
+# pattern as compute_pass_success_probability, reusing PRESSURE_X0/PRESSURE_K/
+# PROB_X0 (same physical meaning: rival distance to the player handling the
+# ball). Invented — Data/Simulation Bibles give no formula for Control de
+# Balon, Primer Toque, or Conduccion beyond their bare names. See
+# docs/decisions.md.
+CONTROL_SKILL_DIVISOR = 200.0  # control_balon + primer_toque, each 0..100 -> 0..1
+CONTROL_PROB_K = 6.0
+
+CONDUCCION_SKILL_DIVISOR = 100.0  # conduccion attribute, 0..100 -> 0..1
+CONDUCCION_PROB_K = 6.0
+
+
+def compute_control_success_probability(
+    receiver_attrs: Attributes, rival_distance_to_receiver: Optional[float]
+) -> float:
+    skill = (receiver_attrs.control_balon + receiver_attrs.primer_toque) / CONTROL_SKILL_DIVISOR
+    if rival_distance_to_receiver is None:
+        pressure_score = 0.0
+    else:
+        pressure_score = 1.0 - score_sigmoid(rival_distance_to_receiver, PRESSURE_X0, PRESSURE_K)
+    net_advantage = skill - pressure_score
+    return score_sigmoid(net_advantage, PROB_X0, CONTROL_PROB_K)
+
+
+def compute_conduccion_maintain_probability(
+    carrier_attrs: Attributes, rival_distance: Optional[float]
+) -> float:
+    skill = carrier_attrs.conduccion / CONDUCCION_SKILL_DIVISOR
+    if rival_distance is None:
+        pressure_score = 0.0
+    else:
+        pressure_score = 1.0 - score_sigmoid(rival_distance, PRESSURE_X0, PRESSURE_K)
+    net_advantage = skill - pressure_score
+    return score_sigmoid(net_advantage, PROB_X0, CONDUCCION_PROB_K)
