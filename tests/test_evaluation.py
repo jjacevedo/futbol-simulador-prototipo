@@ -1,6 +1,7 @@
-from vf.alternatives import PassAlternative
+from vf.alternatives import ConduccionAlternative, PassAlternative
 from vf.entities import Attributes, Player
-from vf.evaluation import evaluate_alternatives
+from vf.evaluation import evaluate_alternatives, evaluate_conduccion_alternatives, normalize_utilities
+from vf.perception import PerceivedEntity
 from vf.understanding import ContextualState
 
 
@@ -52,3 +53,30 @@ def test_utility_normalized_spans_zero_to_one_across_set():
 
     assert normalized["best"] == 1.0
     assert normalized["worst"] == 0.0
+
+
+def test_conduccion_toward_open_space_beats_toward_marking_rival():
+    carrier = _passer()  # at (0.0, 0.0), from existing test helper
+    forward_open = ConduccionAlternative(direction=(1.0, 0.0), target_position=(4.0, 0.0), distance=4.0)
+    forward_marked = ConduccionAlternative(direction=(1.0, 0.0), target_position=(4.0, 0.0), distance=4.0)
+    perceived_with_rival_far = [PerceivedEntity(id="r1", team="B", position=(4.0, 15.0), distance=15.0)]
+    perceived_with_rival_near = [PerceivedEntity(id="r1", team="B", position=(4.5, 0.5), distance=4.5)]
+
+    open_eval = evaluate_conduccion_alternatives(carrier, [forward_open], perceived_with_rival_far)[0]
+    marked_eval = evaluate_conduccion_alternatives(carrier, [forward_marked], perceived_with_rival_near)[0]
+
+    assert open_eval.utility_raw > marked_eval.utility_raw
+
+
+def test_normalize_utilities_handles_empty_list():
+    assert normalize_utilities([]) == []
+
+
+def test_normalize_utilities_combines_pass_and_conduccion_types():
+    carrier = _passer()
+    conduccion_alt = ConduccionAlternative(direction=(1.0, 0.0), target_position=(4.0, 0.0), distance=4.0)
+    conduccion_evaluated = evaluate_conduccion_alternatives(carrier, [conduccion_alt], perceived=[])
+
+    normalized = normalize_utilities(conduccion_evaluated)
+
+    assert normalized[0].utility_normalized == 1.0  # only entry -> normalizes to 1.0
