@@ -12,10 +12,17 @@ class Attributes:
     decision: float
     posicionamiento_ofensivo: float
     posicionamiento_defensivo: float
+    control_balon: float = 50.0
+    primer_toque: float = 50.0
+    conduccion: float = 50.0
 
     @property
     def posicionamiento_promedio(self) -> float:
         return (self.posicionamiento_ofensivo + self.posicionamiento_defensivo) / 2.0
+
+    @property
+    def control_promedio(self) -> float:
+        return (self.control_balon + self.primer_toque) / 2.0
 
 
 @dataclass

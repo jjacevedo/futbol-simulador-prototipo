@@ -26,3 +26,22 @@ def test_match_state_holds_players_and_ball():
     assert state.tick == 0
     assert state.seed == 42
     assert state.ball.state == "controlled"
+
+
+def test_control_promedio():
+    attrs = Attributes(
+        pase_corto=70, vision=60, decision=65,
+        posicionamiento_ofensivo=80, posicionamiento_defensivo=40,
+        control_balon=90, primer_toque=70,
+    )
+    assert attrs.control_promedio == 80.0
+
+
+def test_new_technical_attributes_default_to_fifty():
+    attrs = Attributes(
+        pase_corto=70, vision=60, decision=65,
+        posicionamiento_ofensivo=80, posicionamiento_defensivo=40,
+    )
+    assert attrs.control_balon == 50.0
+    assert attrs.primer_toque == 50.0
+    assert attrs.conduccion == 50.0
