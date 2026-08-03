@@ -47,3 +47,24 @@ def interpolate_position(
     x = start[0] + (target[0] - start[0]) * progress
     y = start[1] + (target[1] - start[1]) * progress
     return (x, y)
+
+
+# Invented — Data Bible Vol VIII gives no equations for sustained movement.
+# One conducción "step" = one re-evaluation opportunity (one cognitive cycle),
+# matching the Simulation Bible's "contacto a contacto" granularity (Cap.
+# 103.3/103.6), not raw per-tick physics. See docs/decisions.md.
+PLAYER_SPEED = 5.0  # m/s
+CONDUCCION_STEP_DISTANCE = 4.0  # meters covered per step
+CONDUCCION_TICKS_PER_STEP = max(1, round((CONDUCCION_STEP_DISTANCE / PLAYER_SPEED) / SIM_DT))
+
+
+def conduccion_step_target(
+    position: Tuple[float, float], direction: Tuple[float, float],
+    step_distance: float = CONDUCCION_STEP_DISTANCE,
+) -> Tuple[float, float]:
+    dx, dy = direction
+    norm = math.hypot(dx, dy)
+    if norm == 0.0:
+        return position
+    ux, uy = dx / norm, dy / norm
+    return (position[0] + ux * step_distance, position[1] + uy * step_distance)
