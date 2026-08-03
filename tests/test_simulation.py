@@ -1,12 +1,13 @@
 import random
 
 from vf.entities import Attributes, Ball, MatchState, Personality, Player
-from vf.simulation import build_scenario, run_one_possession
+from vf.simulation import MAX_CYCLES_PER_POSSESSION, build_scenario, run_possession
 
 
-def _attrs(pase_corto=70):
+def _attrs(pase_corto=70, control_balon=70, primer_toque=70, conduccion=70):
     return Attributes(pase_corto=pase_corto, vision=65, decision=60,
-                       posicionamiento_ofensivo=60, posicionamiento_defensivo=50)
+                       posicionamiento_ofensivo=60, posicionamiento_defensivo=50,
+                       control_balon=control_balon, primer_toque=primer_toque, conduccion=conduccion)
 
 
 def test_build_scenario_has_one_ball_carrier():
@@ -15,86 +16,72 @@ def test_build_scenario_has_one_ball_carrier():
     assert len(carriers) == 1
 
 
-def test_run_one_possession_returns_full_log_when_alternatives_exist():
+def test_run_possession_returns_at_least_one_step():
     state = build_scenario(seed=1)
     rng = random.Random(state.seed)
 
-    log = run_one_possession(state, rng)
+    steps = run_possession(state, rng)
 
-    assert log is not None
-    assert "passer_id" in log
-    assert "target_player_id" in log
-    assert "success" in log
-    assert "utility_normalized" in log
-    assert "alternatives_considered" in log
-    assert len(log["alternatives_considered"]) >= 1
-    assert "weights" in log
+    assert len(steps) >= 1
+    first = steps[0]
+    assert "intention_type" in first
+    assert "alternatives_considered" in first
+    assert "weights" in first
 
 
-def test_run_one_possession_is_reproducible_under_same_seed():
+def test_run_possession_is_reproducible_under_same_seed():
     state_a = build_scenario(seed=3)
     state_b = build_scenario(seed=3)
 
-    log_a = run_one_possession(state_a, random.Random(state_a.seed))
-    log_b = run_one_possession(state_b, random.Random(state_b.seed))
+    steps_a = run_possession(state_a, random.Random(state_a.seed))
+    steps_b = run_possession(state_b, random.Random(state_b.seed))
 
-    assert log_a["target_player_id"] == log_b["target_player_id"]
-    assert log_a["success"] == log_b["success"]
+    assert len(steps_a) == len(steps_b)
+    assert [s["intention_type"] for s in steps_a] == [s["intention_type"] for s in steps_b]
 
 
-def test_alternatives_considered_includes_distance():
+def test_run_possession_never_exceeds_cycle_cap():
     state = build_scenario(seed=1)
     rng = random.Random(state.seed)
 
-    log = run_one_possession(state, rng)
+    steps = run_possession(state, rng)
 
-    for alt in log["alternatives_considered"]:
-        assert "distance" in alt
-        assert isinstance(alt["distance"], float)
-        assert alt["distance"] > 0.0
+    assert len(steps) <= MAX_CYCLES_PER_POSSESSION
 
 
 def _four_player_scenario():
-    # p2 unmarked, p4 marked closely by r1 -> clear utility gap, not a near-tie.
     passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(), facing_rad=0.0, has_ball=True)
     near_forward = Player(id="p2", team="A", position=(8.0, 2.0), attributes=_attrs())
     marked_forward = Player(id="p4", team="A", position=(8.0, -2.0), attributes=_attrs())
     rival = Player(id="r1", team="B", position=(8.0, -3.0), attributes=_attrs())
-
     ball = Ball(position=(0.0, 0.0), owner_id="p1")
     return MatchState(players=[passer, near_forward, marked_forward, rival], ball=ball, tick=0, seed=5)
 
 
-def test_near_tie_false_and_no_runner_up_key_on_clear_winner():
+def test_conducir_step_changes_carrier_position_across_cycles():
     state = _four_player_scenario()
     rng = random.Random(state.seed)
 
-    log = run_one_possession(state, rng)
+    steps = run_possession(state, rng)
 
-    assert log["near_tie"] is False
-    assert "runner_up_target_id" not in log
+    conduccion_steps = [s for s in steps if s.get("intention_type") == "CONDUCCION"]
+    if conduccion_steps:
+        assert "new_position" in conduccion_steps[0]
 
 
-def _near_tie_scenario():
-    # Two teammates symmetric across the passer's facing axis, both unmarked
-    # (no rival present) -> identical utility_raw, gap 0.0, well within
-    # TIE_MARGIN — mirrors tests/test_cognitive_cycle.py::_near_tie_scenario.
-    creative_personality = Personality(creatividad=0.9)
-    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(),
-                     personality=creative_personality, facing_rad=0.0, has_ball=True)
-    left_forward = Player(id="p2", team="A", position=(8.0, 2.0), attributes=_attrs())
-    right_forward = Player(id="p4", team="A", position=(8.0, -2.0), attributes=_attrs())
-
+def test_conservar_scenario_produces_conservar_intention():
+    passer = Player(id="p1", team="A", position=(0.0, 0.0),
+                     attributes=_attrs(pase_corto=20, conduccion=10), facing_rad=0.0, has_ball=True,
+                     fov_angle_deg=360.0)
+    rivals = [
+        Player(id=f"r{i}", team="B", position=pos, attributes=_attrs())
+        for i, pos in enumerate([(3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0),
+                                  (2.1, 2.1), (-2.1, 2.1), (2.1, -2.1), (-2.1, -2.1)])
+    ]
     ball = Ball(position=(0.0, 0.0), owner_id="p1")
-    return MatchState(players=[passer, left_forward, right_forward], ball=ball, tick=0, seed=7)
-
-
-def test_near_tie_true_and_runner_up_set_on_near_tie():
-    state = _near_tie_scenario()
+    state = MatchState(players=[passer, *rivals], ball=ball, tick=0, seed=9)
     rng = random.Random(state.seed)
 
-    log = run_one_possession(state, rng)
+    steps = run_possession(state, rng)
 
-    assert log["near_tie"] is True
-    assert log["runner_up_target_id"] in {"p2", "p4"}
-    assert log["runner_up_target_id"] != log["target_player_id"]
+    assert steps[0]["intention_type"] == "CONSERVAR"

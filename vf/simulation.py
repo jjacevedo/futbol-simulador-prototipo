@@ -1,11 +1,14 @@
 import random
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from vf.cognitive_cycle import run_cognitive_cycle
 from vf.entities import Attributes, Ball, MatchState, Personality, Player
 from vf.evaluation import W_BENEFICIO, W_SEGURIDAD, W_VIABILIDAD
-from vf.match_engine import execute_pass
+from vf.match_engine import execute_conduccion, execute_conservar, execute_pass
 from vf.selection import TIE_MARGIN
+from vf.alternatives import PassAlternative
+
+MAX_CYCLES_PER_POSSESSION = 20  # safety cap, invented — see docs/decisions.md
 
 
 def _attrs(rng: random.Random) -> Attributes:
@@ -15,13 +18,13 @@ def _attrs(rng: random.Random) -> Attributes:
         decision=rng.uniform(40, 90),
         posicionamiento_ofensivo=rng.uniform(40, 90),
         posicionamiento_defensivo=rng.uniform(40, 90),
+        control_balon=rng.uniform(40, 90),
+        primer_toque=rng.uniform(40, 90),
+        conduccion=rng.uniform(40, 90),
     )
 
 
 def _jitter(rng: random.Random, base: Tuple[float, float]) -> Tuple[float, float]:
-    """Seeded jitter so different seeds produce meaningfully different tactical
-    pictures (rival sometimes near p2, sometimes near p3, sometimes near
-    neither/outside FOV), while remaining deterministic for a given seed."""
     return (base[0] + rng.uniform(-3.0, 3.0), base[1] + rng.uniform(-3.0, 3.0))
 
 
@@ -42,52 +45,67 @@ def build_scenario(seed: int) -> MatchState:
     return MatchState(players=[passer, forward, winger, rival], ball=ball, tick=0, seed=seed)
 
 
-def run_one_possession(state: MatchState, rng: random.Random) -> Optional[Dict]:
-    carrier = next((p for p in state.players if p.has_ball), None)
-    if carrier is None:
-        return None
-
-    result = run_cognitive_cycle(carrier, state, rng)
-    if result is None or result.chosen is None:
-        return None
-
-    log = execute_pass(state, carrier.id, result.chosen, rng)
-
-    # Full decision log (Global Constraint: every decision must be
-    # loggable — which alternatives, which scores, which weights, why one
-    # was chosen), not just the chosen alternative's outcome.
-    log["alternatives_considered"] = [
-        {
-            "target_player_id": e.alternative.target_player_id,
-            "distance": e.alternative.distance,
-            "score_beneficio": e.score_beneficio,
-            "score_seguridad": e.score_seguridad,
-            "score_prob_exito": e.score_prob_exito,
-            "utility_raw": e.utility_raw,
-            "utility_normalized": e.utility_normalized,
-        }
-        for e in result.evaluated
-    ]
-    log["weights"] = {
-        "W_BENEFICIO": W_BENEFICIO,
-        "W_SEGURIDAD": W_SEGURIDAD,
-        "W_VIABILIDAD": W_VIABILIDAD,
-        "TIE_MARGIN": TIE_MARGIN,
+def _describe_alternative(e) -> Dict:
+    base = {
+        "score_beneficio": e.score_beneficio,
+        "score_seguridad": e.score_seguridad,
+        "score_prob_exito": e.score_prob_exito,
+        "utility_raw": e.utility_raw,
+        "utility_normalized": e.utility_normalized,
     }
-
-    # near_tie: was the chosen alternative within TIE_MARGIN (raw utility) of
-    # the best alternative that wasn't chosen? Lets a human reviewer see when
-    # personality (creatividad), not a clear utility gap, decided the pass.
-    chosen = result.chosen
-    runner_up_candidates = [
-        e for e in result.evaluated if e.alternative.target_player_id != chosen.alternative.target_player_id
-    ]
-    if runner_up_candidates:
-        runner_up = max(runner_up_candidates, key=lambda e: e.utility_raw)
-        log["near_tie"] = abs(chosen.utility_raw - runner_up.utility_raw) <= TIE_MARGIN
-        if log["near_tie"]:
-            log["runner_up_target_id"] = runner_up.alternative.target_player_id
+    if isinstance(e.alternative, PassAlternative):
+        base["type"] = "PASE"
+        base["target_player_id"] = e.alternative.target_player_id
+        base["distance"] = e.alternative.distance
     else:
-        log["near_tie"] = False
+        base["type"] = "CONDUCCION"
+        base["direction"] = e.alternative.direction
+        base["distance"] = e.alternative.distance
+    return base
 
-    return log
+
+def run_possession(state: MatchState, rng: random.Random) -> List[Dict]:
+    steps: List[Dict] = []
+
+    for _ in range(MAX_CYCLES_PER_POSSESSION):
+        carrier = next((p for p in state.players if p.has_ball), None)
+        if carrier is None:
+            break
+
+        result = run_cognitive_cycle(carrier, state, rng)
+        if result is None:
+            break
+
+        if result.intention_type == "CONSERVAR":
+            step_log = execute_conservar(state, carrier.id)
+        elif result.intention_type == "PASE":
+            step_log = execute_pass(state, carrier.id, result.chosen, rng)
+        elif result.intention_type == "CONDUCCION":
+            step_log = execute_conduccion(state, carrier.id, result.chosen, rng)
+        else:  # "NINGUNA"
+            break
+
+        step_log["intention_type"] = result.intention_type
+        step_log["alternatives_considered"] = [_describe_alternative(e) for e in result.evaluated]
+        step_log["weights"] = {
+            "W_BENEFICIO": W_BENEFICIO,
+            "W_SEGURIDAD": W_SEGURIDAD,
+            "W_VIABILIDAD": W_VIABILIDAD,
+            "TIE_MARGIN": TIE_MARGIN,
+        }
+
+        if result.chosen is not None:
+            others = [e for e in result.evaluated if e is not result.chosen]
+            if others:
+                runner_up = max(others, key=lambda e: e.utility_raw)
+                step_log["near_tie"] = abs(result.chosen.utility_raw - runner_up.utility_raw) <= TIE_MARGIN
+                if step_log["near_tie"]:
+                    step_log["runner_up_utility_raw"] = runner_up.utility_raw
+            else:
+                step_log["near_tie"] = False
+        else:
+            step_log["near_tie"] = False
+
+        steps.append(step_log)
+
+    return steps
