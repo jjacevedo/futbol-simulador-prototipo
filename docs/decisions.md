@@ -68,5 +68,20 @@ calibración esperada según "Riesgos Conocidos" del Plan de Prototipo)
   implementa — todo pase apunta a la posición actual del receptor
   ("pase al jugador"). Se difiere al siguiente prototipo.
 - Intercepción/desvío (Simulation Bible Cap. 91) no se modela: un pase
-  fallido deja el balón suelto (`loose`) en el punto de destino. El
-  Control y Recepción completo (Vol XIII) queda fuera de alcance.
+  fallido deja el balón suelto (`loose`) en el punto de destino.
+  (Nota: Control y Recepción fueron fuera de alcance en Iteración 1 pero
+  Iteración 2 los trae en alcance — ver fórmulas de Control/Conducción abajo.)
+- **Fórmulas de Control/Recepción y Conducción** (Iteración 2): Data Bible
+  Vol XIII no especifica fórmulas para Control de Balón, Primer Toque, o
+  Conducción más allá de los nombres. Se usan sigmoide sobre (habilidad −
+  presión), reutilizando el patrón de `compute_pass_success_probability`.
+  (`vf/probabilistic_engine.py`):
+  - `CONTROL_SKILL_DIVISOR = 200.0`: normaliza la suma de dos atributos
+    (control_balon + primer_toque, cada 0..100) a una escala 0..1.
+  - `CONTROL_PROB_K = 6.0`: pendiente de la sigmoide final que convierte
+    "ventaja neta" (habilidad − presión) en probabilidad de control exitoso.
+  - `CONDUCCION_SKILL_DIVISOR = 100.0`: normaliza el atributo conduccion
+    (0..100) a una escala 0..1.
+  - `CONDUCCION_PROB_K = 6.0`: pendiente de la sigmoide final que convierte
+    "ventaja neta" (habilidad − presión) en probabilidad de mantener la
+    conducción.
