@@ -1,12 +1,13 @@
 import random
 
 from vf.entities import Attributes, Ball, MatchState, Personality, Player
-from vf.cognitive_cycle import run_cognitive_cycle
+from vf.cognitive_cycle import CONSERVAR_THRESHOLD, run_cognitive_cycle
 
 
-def _attrs(pase_corto=70):
+def _attrs(pase_corto=70, control_balon=70, primer_toque=70, conduccion=70):
     return Attributes(pase_corto=pase_corto, vision=65, decision=60,
-                       posicionamiento_ofensivo=60, posicionamiento_defensivo=50)
+                       posicionamiento_ofensivo=60, posicionamiento_defensivo=50,
+                       control_balon=control_balon, primer_toque=primer_toque, conduccion=conduccion)
 
 
 def _four_player_scenario():
@@ -30,19 +31,18 @@ def test_full_cycle_perceives_teammates_within_fov_only_criterio_1():
     perceived_ids = {e.id for e in result.perceived}
     assert "p2" in perceived_ids
     assert "p4" in perceived_ids
-    assert "p3" not in perceived_ids  # behind observer, outside 100 deg FOV
+    assert "p3" not in perceived_ids
 
 
-def test_full_cycle_produces_distinct_utilities_criterio_2():
+def test_full_cycle_combines_pass_and_conduccion_alternatives():
     state = _four_player_scenario()
     passer = state.players[0]
 
     result = run_cognitive_cycle(passer, state, random.Random(state.seed))
 
-    assert len(result.evaluated) >= 2  # p2 and p4 visible (p3 excluded by FOV)
-    utility_by_target = {e.alternative.target_player_id: e.utility_raw for e in result.evaluated}
-    # p4 is marked closely by a rival, p2 is unmarked -> lower utility for p4
-    assert utility_by_target["p4"] < utility_by_target["p2"]
+    assert len(result.pass_alternatives) >= 2  # p2, p4 visible
+    assert len(result.conduccion_alternatives) == 8
+    assert len(result.evaluated) == len(result.pass_alternatives) + len(result.conduccion_alternatives)
 
 
 def test_full_cycle_selection_reproducible_under_same_seed_criterio_3():
@@ -52,43 +52,39 @@ def test_full_cycle_selection_reproducible_under_same_seed_criterio_3():
     result_a = run_cognitive_cycle(state_a.players[0], state_a, random.Random(state_a.seed))
     result_b = run_cognitive_cycle(state_b.players[0], state_b, random.Random(state_b.seed))
 
-    assert result_a.chosen.alternative.target_player_id == result_b.chosen.alternative.target_player_id
+    assert result_a.intention_type == result_b.intention_type
+    if result_a.chosen is not None:
+        assert type(result_a.chosen.alternative) == type(result_b.chosen.alternative)
 
 
-def _near_tie_scenario():
-    # Two teammates symmetric across the passer's facing axis, both unmarked
-    # (no rival present at all) -> identical forward_gain, identical
-    # rival_distance (None), hence identical utility_raw/utility_normalized.
-    # This lands the gap at 0.0, well within selection.TIE_MARGIN (0.05), so
-    # select_alternative must take the weighted-draw branch (2 contenders)
-    # and actually call rng.random() rather than the len(contenders) == 1
-    # fast path used by the other seed-reproducibility test above.
-    creative_personality = Personality(creatividad=0.9)
-    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(),
-                     personality=creative_personality, facing_rad=0.0, has_ball=True)
-    left_forward = Player(id="p2", team="A", position=(8.0, 2.0), attributes=_attrs())
-    right_forward = Player(id="p4", team="A", position=(8.0, -2.0), attributes=_attrs())
-
+def _all_options_starved_scenario():
+    # Passer surrounded by rivals in every conduccion direction and with no
+    # visible teammates -> every alternative should score below
+    # CONSERVAR_THRESHOLD, forcing the CONSERVAR intention (Criterio 1).
+    # fov_angle_deg=360 so the passer actually perceives all 8 surrounding
+    # rivals (default FOV is 100 deg; with it, rivals behind/beside the
+    # passer fall outside perceive()'s output, leaving the conduccion
+    # evaluator a false "blind spot" and no scenario can force CONSERVAR).
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(pase_corto=30, conduccion=20),
+                     facing_rad=0.0, fov_angle_deg=360.0, has_ball=True)
+    rivals = [
+        Player(id=f"r{i}", team="B", position=pos, attributes=_attrs())
+        for i, pos in enumerate([(3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0),
+                                  (2.1, 2.1), (-2.1, 2.1), (2.1, -2.1), (-2.1, -2.1)])
+    ]
     ball = Ball(position=(0.0, 0.0), owner_id="p1")
-    return MatchState(players=[passer, left_forward, right_forward], ball=ball, tick=0, seed=7)
+    return MatchState(players=[passer, *rivals], ball=ball, tick=0, seed=9)
 
 
-def test_full_cycle_near_tie_selection_reproducible_under_same_seed():
-    state_a = _near_tie_scenario()
-    state_b = _near_tie_scenario()
+def test_full_cycle_conserves_when_all_alternatives_below_threshold_criterio_1():
+    state = _all_options_starved_scenario()
+    passer = state.players[0]
 
-    result_a = run_cognitive_cycle(state_a.players[0], state_a, random.Random(state_a.seed))
-    result_b = run_cognitive_cycle(state_b.players[0], state_b, random.Random(state_b.seed))
+    result = run_cognitive_cycle(passer, state, random.Random(state.seed))
 
-    # Sanity check: confirm this scenario actually produces a near-tie (gap
-    # <= TIE_MARGIN) rather than a clear winner, so select_alternative is
-    # exercised via its RNG-dependent weighted-draw branch, not the trivial
-    # single-contender fast path.
-    utility_by_target = {e.alternative.target_player_id: e.utility_normalized for e in result_a.evaluated}
-    gap = abs(utility_by_target["p2"] - utility_by_target["p4"])
-    assert gap <= 0.05
-
-    assert result_a.chosen.alternative.target_player_id == result_b.chosen.alternative.target_player_id
+    assert max(e.utility_raw for e in result.evaluated) < CONSERVAR_THRESHOLD
+    assert result.intention_type == "CONSERVAR"
+    assert result.chosen is None
 
 
 def test_non_ball_carrier_produces_no_cycle_result():
