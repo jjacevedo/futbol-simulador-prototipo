@@ -1,7 +1,7 @@
 import math
 
 from vf.alternatives import ConduccionAlternative, generate_conduccion_alternatives, generate_pass_alternatives
-from vf.entities import Attributes, Player
+from vf.entities import FIELD_LENGTH, FIELD_WIDTH, Attributes, Player
 from vf.goals import Goal
 from vf.perception import PerceivedEntity
 from vf.physics import CONDUCCION_STEP_DISTANCE
@@ -54,7 +54,10 @@ def test_excludes_observer_from_alternatives():
 
 
 def test_generates_eight_conduccion_directions_when_goal_present():
-    observer = _observer()
+    # Centered on the pitch (not near an edge) so none of the 8 directions
+    # are excluded by the Fix 2 field-bounds check — see the dedicated
+    # near-corner test below for the excluded-direction behavior.
+    observer = Player(id="p1", team="A", position=(20.0, 12.5), attributes=_attrs())
     goals = [Goal(type="PASAR_BALON", priority=1.0)]
 
     alts = generate_conduccion_alternatives(observer, goals)
@@ -84,3 +87,16 @@ def test_no_conduccion_alternatives_without_pasar_balon_goal():
     alts = generate_conduccion_alternatives(observer, goals=[])
 
     assert alts == []
+
+
+def test_conduccion_alternatives_near_corner_exclude_out_of_bounds_directions():
+    observer = Player(id="p1", team="A", position=(1.0, 1.0), attributes=_attrs())
+    goals = [Goal(type="PASAR_BALON", priority=1.0)]
+
+    alts = generate_conduccion_alternatives(observer, goals)
+
+    assert len(alts) < 8  # some of the 8 directions would exit the pitch from this corner
+    for alt in alts:
+        x, y = alt.target_position
+        assert 0.0 <= x <= FIELD_LENGTH
+        assert 0.0 <= y <= FIELD_WIDTH

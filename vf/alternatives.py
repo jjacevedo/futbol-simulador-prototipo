@@ -2,7 +2,7 @@ import math
 from dataclasses import dataclass
 from typing import List, Tuple
 
-from vf.entities import Player
+from vf.entities import FIELD_LENGTH, FIELD_WIDTH, Player
 from vf.goals import Goal
 from vf.perception import PerceivedEntity
 from vf.physics import CONDUCCION_STEP_DISTANCE, conduccion_step_target
@@ -61,6 +61,8 @@ def generate_conduccion_alternatives(observer: Player, goals: List[Goal]) -> Lis
         rad = math.radians(deg)
         direction = (math.cos(rad), math.sin(rad))
         target = conduccion_step_target(observer.position, direction)
+        if target[0] < 0 or target[0] > FIELD_LENGTH or target[1] < 0 or target[1] > FIELD_WIDTH:
+            continue  # would exit the pitch — not a viable conduccion candidate
         alternatives.append(
             ConduccionAlternative(direction=direction, target_position=target, distance=CONDUCCION_STEP_DISTANCE)
         )

@@ -2,9 +2,9 @@ import math
 import random
 from typing import Dict, Optional
 
-from vf.entities import MatchState
+from vf.entities import MatchState, clamp_to_field
 from vf.evaluation import EvaluatedAlternative
-from vf.physics import CONDUCCION_TICKS_PER_STEP, advance_ball, start_pass
+from vf.physics import CONDUCCION_TICKS_PER_STEP, advance_ball, conduccion_step_target, start_pass
 from vf.probabilistic_engine import (
     compute_conduccion_maintain_probability,
     compute_control_success_probability,
@@ -13,6 +13,11 @@ from vf.probabilistic_engine import (
 )
 
 CONSERVAR_TICKS = 1  # minimal simulated-time advance for a CONSERVAR cycle. Invented.
+
+# Invented — without this the ball settles at distance 0 from whichever
+# player just touched it, making recover_loose_ball's "nearest player" trivially
+# resolve to that same player every time. See docs/decisions.md.
+LOOSE_BALL_DRIFT = 2.0  # meters
 
 
 def _nearest_real_rival_distance(state: MatchState, team: str, position) -> Optional[float]:
@@ -77,6 +82,10 @@ def execute_pass(
 
     if not pass_success:
         state.ball.state = "loose"
+        pass_direction = (target.position[0] - passer.position[0], target.position[1] - passer.position[1])
+        state.ball.position = clamp_to_field(
+            conduccion_step_target(state.ball.position, pass_direction, LOOSE_BALL_DRIFT)
+        )
         state.ball.owner_id = None
         log["control_success"] = None
         log["control_probability"] = None
@@ -100,6 +109,11 @@ def execute_pass(
         log["recovered_by"] = None
     else:
         state.ball.state = "loose"
+        angle = rng.uniform(0, 2 * math.pi)
+        drift_direction = (math.cos(angle), math.sin(angle))
+        state.ball.position = clamp_to_field(
+            conduccion_step_target(state.ball.position, drift_direction, LOOSE_BALL_DRIFT)
+        )
         state.ball.owner_id = None
         log["recovered_by"] = recover_loose_ball(state)
 
@@ -138,6 +152,9 @@ def execute_conduccion(
     else:
         carrier.has_ball = False
         state.ball.state = "loose"
+        state.ball.position = clamp_to_field(
+            conduccion_step_target(state.ball.position, alt.direction, LOOSE_BALL_DRIFT)
+        )
         state.ball.owner_id = None
         log["recovered_by"] = recover_loose_ball(state)
 

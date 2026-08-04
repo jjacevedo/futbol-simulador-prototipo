@@ -43,7 +43,6 @@ def test_failed_control_leaves_ball_loose_then_recovered():
     state = _state_with_two_players(receiver_attrs=_attrs(control_balon=10, primer_toque=10))
     rng = random.Random(1)
     call_count = {"n": 0}
-    real_random = rng.random
 
     def rigged(*args, **kwargs):
         call_count["n"] += 1
@@ -55,8 +54,11 @@ def test_failed_control_leaves_ball_loose_then_recovered():
     assert log["pass_success"] is True
     assert log["control_success"] is False
     assert log["success"] is False
-    assert log["recovered_by"] is not None  # nearest player (the receiver itself, at the ball's position) recovers
+    assert log["recovered_by"] is not None
     assert state.ball.state == "controlled"  # recovered, not left loose forever
+    # the ball must have drifted from the receiver's exact position — otherwise
+    # "nearest player" trivially resolves to the receiver every time (Fix 1)
+    assert state.ball.position != (6.0, 0.0)
 
 
 def test_failed_pass_never_reaches_control_stage():
@@ -69,6 +71,8 @@ def test_failed_pass_never_reaches_control_stage():
     assert log["pass_success"] is False
     assert log["control_success"] is None
     assert log["success"] is False
+    # ball drifted past the target position (Fix 1), not left exactly on top of it
+    assert state.ball.position != (6.0, 0.0)
 
 
 def _chosen_conduccion_alt(direction=(1.0, 0.0), target_position=(4.0, 0.0)):
@@ -116,3 +120,28 @@ def test_recover_loose_ball_assigns_nearest_player():
     assert p_near.has_ball is True
     assert state.ball.owner_id == "near"
     assert state.ball.state == "controlled"
+
+
+def test_loose_ball_recovery_is_genuinely_contested_after_pass_accuracy_failure():
+    # "the failing player" is the receiver: under the pre-Fix-1 bug the ball
+    # settled exactly on top of them (distance 0), so they always recovered
+    # their own failed pass. Fix 1 drifts the ball LOOSE_BALL_DRIFT=2.0m past
+    # them along the pass direction before recovery, so a different player who
+    # happens to be near the drifted landing spot can now be closer.
+    passer = Player(id="p1", team="A", position=(-10.0, 0.0), attributes=_attrs(), has_ball=True)
+    target = Player(id="p2", team="A", position=(0.0, 0.0), attributes=_attrs())  # "the failing player"
+    # pass direction is (1.0, 0.0); drifted ball lands at (2.0, 0.0)
+    close_candidate = Player(id="close", team="B", position=(2.05, 0.0), attributes=_attrs())
+    far_candidate = Player(id="far", team="B", position=(-30.0, 20.0), attributes=_attrs())
+    ball = Ball(position=(-10.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer, target, close_candidate, far_candidate], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+    rng.random = lambda: 0.999  # forces pass-accuracy failure regardless of probability
+
+    chosen = _chosen_pass_alt(target_id="p2", target_position=(0.0, 0.0))
+    log = execute_pass(state, passer_id="p1", chosen=chosen, rng=rng)
+
+    assert log["pass_success"] is False
+    assert state.ball.position != (0.0, 0.0)  # drifted, not left on top of the receiver
+    assert log["recovered_by"] == "close"
+    assert log["recovered_by"] != "p2"

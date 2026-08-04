@@ -1,4 +1,4 @@
-from vf.entities import Attributes, Personality, Player, Ball, MatchState
+from vf.entities import FIELD_LENGTH, FIELD_WIDTH, Attributes, Ball, MatchState, Personality, Player, clamp_to_field
 
 
 def test_posicionamiento_promedio():
@@ -45,3 +45,15 @@ def test_new_technical_attributes_default_to_fifty():
     assert attrs.control_balon == 50.0
     assert attrs.primer_toque == 50.0
     assert attrs.conduccion == 50.0
+
+
+def test_clamp_to_field_leaves_in_bounds_position_unchanged():
+    position = (10.0, 12.5)
+    assert clamp_to_field(position) == position
+
+
+def test_clamp_to_field_clamps_each_edge():
+    assert clamp_to_field((-5.0, 10.0)) == (0.0, 10.0)
+    assert clamp_to_field((FIELD_LENGTH + 5.0, 10.0)) == (FIELD_LENGTH, 10.0)
+    assert clamp_to_field((10.0, -5.0)) == (10.0, 0.0)
+    assert clamp_to_field((10.0, FIELD_WIDTH + 5.0)) == (10.0, FIELD_WIDTH)

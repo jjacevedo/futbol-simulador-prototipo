@@ -67,9 +67,17 @@ def _describe_alternative(e) -> Dict:
 def run_possession(state: MatchState, rng: random.Random) -> List[Dict]:
     steps: List[Dict] = []
 
+    initial_carrier = next((p for p in state.players if p.has_ball), None)
+    possession_team = initial_carrier.team if initial_carrier is not None else None
+
     for _ in range(MAX_CYCLES_PER_POSSESSION):
         carrier = next((p for p in state.players if p.has_ball), None)
         if carrier is None:
+            break
+        if carrier.team != possession_team:
+            # Ball changed hands to a rival team — this possession record
+            # belongs to one team only; the opponent's ensuing possession is
+            # a separate run_possession call, out of scope here.
             break
 
         result = run_cognitive_cycle(carrier, state, rng)

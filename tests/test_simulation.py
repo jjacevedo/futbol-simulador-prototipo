@@ -1,5 +1,7 @@
 import random
 
+import vf.simulation as simulation_module
+from vf.cognitive_cycle import CognitiveCycleResult
 from vf.entities import Attributes, Ball, MatchState, Personality, Player
 from vf.simulation import MAX_CYCLES_PER_POSSESSION, build_scenario, run_possession
 
@@ -67,6 +69,48 @@ def test_conducir_step_changes_carrier_position_across_cycles():
     conduccion_steps = [s for s in steps if s.get("intention_type") == "CONDUCCION"]
     if conduccion_steps:
         assert "new_position" in conduccion_steps[0]
+        # the passer's original position in _four_player_scenario is (0.0, 0.0);
+        # movement must have actually happened, not just be present in the log
+        assert conduccion_steps[0]["new_position"] != (0.0, 0.0)
+
+
+def test_run_possession_stops_when_ball_changes_teams(monkeypatch):
+    # Engineer a turnover after exactly one step (bypassing the real cognitive
+    # cycle / execute_pass, per Fix 3's test guidance) and assert run_possession
+    # terminates instead of silently absorbing the rival team's next cycle.
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(), has_ball=True)
+    rival = Player(id="r1", team="B", position=(20.0, 20.0), attributes=_attrs())
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer, rival], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+
+    call_count = {"n": 0}
+
+    def fake_cognitive_cycle(observer, state, rng):
+        call_count["n"] += 1
+        return CognitiveCycleResult(
+            perceived=[], context=None, goals=[], pass_alternatives=[],
+            conduccion_alternatives=[], evaluated=[], chosen=None, intention_type="PASE",
+        )
+
+    def fake_execute_pass(state, carrier_id, chosen, rng):
+        carrier = next(p for p in state.players if p.id == carrier_id)
+        carrier.has_ball = False
+        rival_player = next(p for p in state.players if p.team != carrier.team)
+        rival_player.has_ball = True
+        state.ball.owner_id = rival_player.id
+        state.ball.state = "controlled"
+        return {"passer_id": carrier_id, "success": False, "recovered_by": rival_player.id}
+
+    monkeypatch.setattr(simulation_module, "run_cognitive_cycle", fake_cognitive_cycle)
+    monkeypatch.setattr(simulation_module, "execute_pass", fake_execute_pass)
+
+    steps = run_possession(state, rng)
+
+    assert len(steps) == 1  # loop must break on the turnover, not run the rival's cycle
+    assert call_count["n"] == 1  # cognitive cycle never ran for the rival
+    assert rival.has_ball is True
+    assert passer.has_ball is False
 
 
 def test_conservar_scenario_produces_conservar_intention():

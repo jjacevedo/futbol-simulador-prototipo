@@ -41,7 +41,9 @@ def test_full_cycle_combines_pass_and_conduccion_alternatives():
     result = run_cognitive_cycle(passer, state, random.Random(state.seed))
 
     assert len(result.pass_alternatives) >= 2  # p2, p4 visible
-    assert len(result.conduccion_alternatives) == 8
+    # p1 sits at the field origin (0.0, 0.0) in this fixture; after Fix 2's
+    # field-bounds check only the 0/45/90 deg directions stay on the pitch.
+    assert len(result.conduccion_alternatives) == 3
     assert len(result.evaluated) == len(result.pass_alternatives) + len(result.conduccion_alternatives)
 
 

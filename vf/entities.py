@@ -5,6 +5,12 @@ FIELD_LENGTH = 40.0
 FIELD_WIDTH = 25.0
 
 
+def clamp_to_field(position: Tuple[float, float]) -> Tuple[float, float]:
+    x = max(0.0, min(FIELD_LENGTH, position[0]))
+    y = max(0.0, min(FIELD_WIDTH, position[1]))
+    return (x, y)
+
+
 @dataclass
 class Attributes:
     pase_corto: float

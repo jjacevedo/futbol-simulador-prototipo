@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 from vf.alternatives import ConduccionAlternative, PassAlternative
 from vf.entities import Player
@@ -27,7 +27,7 @@ BENEFIT_MAX = 20.0
 
 @dataclass
 class EvaluatedAlternative:
-    alternative: PassAlternative
+    alternative: Union[PassAlternative, ConduccionAlternative]
     score_beneficio: float
     score_seguridad: float
     score_prob_exito: float
