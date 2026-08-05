@@ -199,6 +199,26 @@ def test_successful_control_orients_receiver_toward_passer_option_a():
     assert math.isclose(log["facing_rad"], expected, abs_tol=1e-9)
 
 
+def test_successful_control_orients_receiver_to_attack_direction_option_b(monkeypatch):
+    import vf.match_engine as match_engine_module
+    monkeypatch.setattr(match_engine_module, "RECEPTION_FACING_MODE", "ATTACK")
+
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(), has_ball=True)
+    receiver = Player(id="p2", team="A", position=(6.0, 8.0), attributes=_attrs())
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer, receiver], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+
+    alt = PassAlternative(target_player_id="p2", target_position=(6.0, 8.0), distance=10.0)
+    chosen = EvaluatedAlternative(alternative=alt, score_beneficio=0.8, score_seguridad=0.9,
+                                   score_prob_exito=0.9, utility_raw=0.85, utility_normalized=1.0)
+
+    log = execute_pass(state, passer_id="p1", chosen=chosen, rng=rng)
+
+    assert log["control_success"] is True
+    assert receiver.facing_rad == 0.0  # facing +x, the attack direction, regardless of where the pass came from
+
+
 def test_facing_not_set_when_pass_fails():
     passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(), has_ball=True)
     receiver = Player(id="p2", team="A", position=(6.0, 0.0), attributes=_attrs(), facing_rad=1.23)

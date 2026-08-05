@@ -19,6 +19,12 @@ CONSERVAR_TICKS = 1  # minimal simulated-time advance for a CONSERVAR cycle. Inv
 # resolve to that same player every time. See docs/decisions.md.
 LOOSE_BALL_DRIFT = 2.0  # meters
 
+# Iteracion 3 Cap. 4: Opcion A (face the incoming ball/passer) is the default,
+# implemented and measured first per the plan's own decision process. Opcion
+# B (face the attack direction) is implemented as a toggle, not a
+# replacement, so both can be measured and compared in Lecciones Aprendidas.
+RECEPTION_FACING_MODE = "BALL"  # "BALL" (Opcion A) | "ATTACK" (Opcion B)
+
 
 def _nearest_real_rival_distance(state: MatchState, team: str, position) -> Optional[float]:
     rivals = [p for p in state.players if p.team != team]
@@ -106,9 +112,12 @@ def execute_pass(
         state.ball.state = "controlled"
         state.ball.owner_id = target.id
         target.has_ball = True
-        target.facing_rad = math.atan2(
-            passer.position[1] - target.position[1], passer.position[0] - target.position[0]
-        )
+        if RECEPTION_FACING_MODE == "ATTACK":
+            target.facing_rad = 0.0
+        else:
+            target.facing_rad = math.atan2(
+                passer.position[1] - target.position[1], passer.position[0] - target.position[0]
+            )
         log["facing_rad"] = target.facing_rad
         log["recovered_by"] = None
     else:
