@@ -1,7 +1,9 @@
+import math
 import random
 
 from vf.entities import Attributes, Ball, MatchState, Personality, Player
 from vf.cognitive_cycle import CONSERVAR_THRESHOLD, run_cognitive_cycle
+from vf.match_engine import execute_conduccion
 
 
 def _attrs(pase_corto=70, control_balon=70, primer_toque=70, conduccion=70):
@@ -96,3 +98,31 @@ def test_non_ball_carrier_produces_no_cycle_result():
     result = run_cognitive_cycle(non_carrier, state, random.Random(state.seed))
 
     assert result is None
+
+
+def test_perception_next_cycle_reflects_facing_after_conduccion():
+    # A teammate sits behind the passer's initial +x-facing orientation
+    # (invisible at first), and ahead of where the passer will be facing
+    # after conducting toward -x (turning around).
+    passer = Player(id="p1", team="A", position=(10.0, 0.0), attributes=_attrs(),
+                     facing_rad=0.0, has_ball=True)  # facing +x
+    teammate_behind = Player(id="p2", team="A", position=(-5.0, 0.0), attributes=_attrs())
+    ball = Ball(position=(10.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer, teammate_behind], ball=ball, tick=0, seed=1)
+
+    result_before = run_cognitive_cycle(passer, state, random.Random(1))
+    assert "p2" not in {e.id for e in result_before.perceived}  # behind, outside 100 deg FOV
+
+    backward_alt = None
+    for alt in result_before.conduccion_alternatives:
+        if math.isclose(alt.direction[0], -1.0, abs_tol=1e-6) and math.isclose(alt.direction[1], 0.0, abs_tol=1e-6):
+            backward_alt = alt
+            break
+    assert backward_alt is not None
+    from vf.evaluation import EvaluatedAlternative
+    chosen = EvaluatedAlternative(alternative=backward_alt, score_beneficio=1.0, score_seguridad=1.0,
+                                   score_prob_exito=1.0, utility_raw=1.0, utility_normalized=1.0)
+    execute_conduccion(state, carrier_id="p1", chosen=chosen, rng=random.Random(1))
+
+    result_after = run_cognitive_cycle(passer, state, random.Random(2))
+    assert "p2" in {e.id for e in result_after.perceived}  # now facing -x, teammate ahead
