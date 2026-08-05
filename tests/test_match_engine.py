@@ -176,3 +176,41 @@ def test_loose_ball_recovery_is_genuinely_contested_after_pass_accuracy_failure(
     assert state.ball.position != (0.0, 0.0)  # drifted, not left on top of the receiver
     assert log["recovered_by"] == "close"
     assert log["recovered_by"] != "p2"
+
+
+def test_successful_control_orients_receiver_toward_passer_option_a():
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(), has_ball=True)
+    receiver = Player(id="p2", team="A", position=(6.0, 8.0), attributes=_attrs())  # NE of passer
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer, receiver], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+
+    alt = PassAlternative(target_player_id="p2", target_position=(6.0, 8.0), distance=10.0)
+    chosen = EvaluatedAlternative(alternative=alt, score_beneficio=0.8, score_seguridad=0.9,
+                                   score_prob_exito=0.9, utility_raw=0.85, utility_normalized=1.0)
+
+    log = execute_pass(state, passer_id="p1", chosen=chosen, rng=rng)
+
+    assert log["control_success"] is True
+    # receiver at (6,8), passer at (0,0) -> ball arrived from the SW ->
+    # receiver should face back toward the passer, i.e. direction (-6,-8)
+    expected = math.atan2(-8.0, -6.0)
+    assert math.isclose(receiver.facing_rad, expected, abs_tol=1e-9)
+    assert math.isclose(log["facing_rad"], expected, abs_tol=1e-9)
+
+
+def test_facing_not_set_when_pass_fails():
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(), has_ball=True)
+    receiver = Player(id="p2", team="A", position=(6.0, 0.0), attributes=_attrs(), facing_rad=1.23)
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer, receiver], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+    rng.random = lambda: 0.999  # force pass failure
+
+    alt = PassAlternative(target_player_id="p2", target_position=(6.0, 0.0), distance=6.0)
+    chosen = EvaluatedAlternative(alternative=alt, score_beneficio=0.8, score_seguridad=0.9,
+                                   score_prob_exito=0.9, utility_raw=0.85, utility_normalized=1.0)
+
+    execute_pass(state, passer_id="p1", chosen=chosen, rng=rng)
+
+    assert math.isclose(receiver.facing_rad, 1.23, abs_tol=1e-9)  # unchanged

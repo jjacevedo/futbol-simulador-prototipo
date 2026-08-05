@@ -106,6 +106,10 @@ def execute_pass(
         state.ball.state = "controlled"
         state.ball.owner_id = target.id
         target.has_ball = True
+        target.facing_rad = math.atan2(
+            passer.position[1] - target.position[1], passer.position[0] - target.position[0]
+        )
+        log["facing_rad"] = target.facing_rad
         log["recovered_by"] = None
     else:
         state.ball.state = "loose"
