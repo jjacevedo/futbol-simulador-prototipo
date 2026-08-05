@@ -1,3 +1,4 @@
+import math
 import random
 
 from vf.alternatives import ConduccionAlternative, PassAlternative
@@ -93,6 +94,36 @@ def test_execute_conduccion_moves_carrier_and_ball_together_on_success():
     assert passer.position == (4.0, 0.0)
     assert state.ball.position == (4.0, 0.0)
     assert passer.has_ball is True
+
+
+def test_execute_conduccion_updates_carrier_facing_to_direction_of_movement():
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(),
+                     facing_rad=0.0, has_ball=True)
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+
+    diagonal_alt = _chosen_conduccion_alt(direction=(0.0, 1.0), target_position=(0.0, 4.0))
+    log = execute_conduccion(state, carrier_id="p1", chosen=diagonal_alt, rng=rng)
+
+    assert math.isclose(passer.facing_rad, math.pi / 2, abs_tol=1e-9)  # facing +y
+    assert math.isclose(log["facing_rad"], math.pi / 2, abs_tol=1e-9)
+
+
+def test_execute_conduccion_facing_updates_even_when_control_is_lost():
+    # facing_rad reflects the direction the player WAS moving in this step,
+    # regardless of whether they kept the ball at the end of it.
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(conduccion=1),
+                     facing_rad=0.0, has_ball=True)
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+    rng.random = lambda: 0.999  # force loss of control
+
+    backward_alt = _chosen_conduccion_alt(direction=(-1.0, 0.0), target_position=(-4.0, 0.0))
+    execute_conduccion(state, carrier_id="p1", chosen=backward_alt, rng=rng)
+
+    assert math.isclose(passer.facing_rad, math.pi, abs_tol=1e-9)  # facing -x
 
 
 def test_execute_conservar_advances_tick_without_moving():

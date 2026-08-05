@@ -135,6 +135,7 @@ def execute_conduccion(
     maintained = resolve_pass(rng, maintain_probability)
 
     carrier.position = new_position
+    carrier.facing_rad = math.atan2(alt.direction[1], alt.direction[0])
     state.ball.position = new_position
     state.tick += CONDUCCION_TICKS_PER_STEP
 
@@ -142,6 +143,7 @@ def execute_conduccion(
         "carrier_id": carrier.id,
         "direction": alt.direction,
         "new_position": new_position,
+        "facing_rad": carrier.facing_rad,
         "maintain_probability": maintain_probability,
         "success": maintained,
         "ticks_elapsed": CONDUCCION_TICKS_PER_STEP,
