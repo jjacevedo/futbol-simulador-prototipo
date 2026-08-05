@@ -1,3 +1,4 @@
+import math
 from typing import Any, Dict, List
 
 # Criterio 4A: no possession should have the same actor repeat the exact same
@@ -69,3 +70,36 @@ def trailing_conduccion_streak(history: List[Dict[str, Any]]) -> int:
         else:
             break
     return streak
+
+
+# Criterio 5 (Iteracion 3): flag repeated large facing_rad swings between a
+# player's own consecutive cycles as "oscilacion perceptiva sin motivo
+# aparente." A single large turn is legitimate (e.g. turning to face a new
+# Conduccion direction, or receiving a pass from behind); only a REPEATED
+# flip-flop pattern counts. Invented thresholds — see docs/decisions.md.
+MAX_FACING_SWING_RAD = 2.5  # ~143 degrees
+MIN_OSCILLATION_REPEATS = 2
+
+
+def _angular_diff(a: float, b: float) -> float:
+    diff = abs(a - b) % (2 * math.pi)
+    return min(diff, 2 * math.pi - diff)
+
+
+def detect_facing_oscillation(
+    facing_history: List[Dict[str, Any]], max_swing: float = MAX_FACING_SWING_RAD,
+    min_repeats: int = MIN_OSCILLATION_REPEATS,
+) -> bool:
+    large_swings = 0
+    for i in range(1, len(facing_history)):
+        prev, curr = facing_history[i - 1], facing_history[i]
+        if prev["actor_id"] != curr["actor_id"]:
+            large_swings = 0
+            continue
+        if _angular_diff(prev["facing_rad"], curr["facing_rad"]) > max_swing:
+            large_swings += 1
+            if large_swings >= min_repeats:
+                return True
+        else:
+            large_swings = 0
+    return False

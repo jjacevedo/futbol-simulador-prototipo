@@ -1,4 +1,7 @@
+import math
+
 from vf.degeneracy import MAX_CONDUCCION_STREAK, MAX_LOOP_REPEATS, detect_action_loop, max_conduccion_streak, trailing_conduccion_streak
+from vf.degeneracy import MAX_FACING_SWING_RAD, MIN_OSCILLATION_REPEATS, detect_facing_oscillation
 
 
 def _entry(actor_id, action_type, action_key):
@@ -114,3 +117,47 @@ def test_trailing_conduccion_streak_resets_on_actor_change():
         _entry("p2", "CONDUCCION", (1.0, 0.0)),
     ]
     assert trailing_conduccion_streak(history) == 1
+
+
+def _facing_entry(actor_id, facing_rad):
+    return {"actor_id": actor_id, "facing_rad": facing_rad}
+
+
+def test_no_oscillation_in_smoothly_turning_history():
+    history = [
+        _facing_entry("p1", 0.0),
+        _facing_entry("p1", 0.3),
+        _facing_entry("p1", 0.6),
+        _facing_entry("p1", 0.9),
+    ]
+    assert detect_facing_oscillation(history) is False
+
+
+def test_oscillation_detected_on_repeated_large_flips():
+    history = [
+        _facing_entry("p1", 0.0),
+        _facing_entry("p1", math.pi),   # ~180 deg flip
+        _facing_entry("p1", 0.0),        # flip back
+        _facing_entry("p1", math.pi),   # flip again
+    ]
+    assert detect_facing_oscillation(history) is True
+
+
+def test_single_large_swing_is_not_enough_to_flag():
+    # one big turn (e.g. genuinely turning around after a pass) is expected
+    # behavior, not oscillation — only REPEATED big swings count.
+    history = [
+        _facing_entry("p1", 0.0),
+        _facing_entry("p1", math.pi),
+    ]
+    assert detect_facing_oscillation(history) is False
+
+
+def test_oscillation_ignores_different_actors():
+    history = [
+        _facing_entry("p1", 0.0),
+        _facing_entry("p2", math.pi),
+        _facing_entry("p1", 0.0),
+        _facing_entry("p2", math.pi),
+    ]
+    assert detect_facing_oscillation(history) is False

@@ -91,6 +91,19 @@ def run_possession(state: MatchState, rng: random.Random) -> List[Dict]:
         elif result.intention_type == "CONDUCCION":
             step_log = execute_conduccion(state, carrier.id, result.chosen, rng)
         else:  # "NINGUNA"
+            steps.append({
+                "intention_type": "NINGUNA",
+                "carrier_id": carrier.id,
+                "alternatives_considered": [],
+                "weights": {
+                    "W_BENEFICIO": W_BENEFICIO,
+                    "W_SEGURIDAD": W_SEGURIDAD,
+                    "W_VIABILIDAD": W_VIABILIDAD,
+                    "TIE_MARGIN": TIE_MARGIN,
+                },
+                "near_tie": False,
+                "success": False,
+            })
             break
 
         step_log["intention_type"] = result.intention_type

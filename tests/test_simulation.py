@@ -129,3 +129,33 @@ def test_conservar_scenario_produces_conservar_intention():
     steps = run_possession(state, rng)
 
     assert steps[0]["intention_type"] == "CONSERVAR"
+
+
+def test_ningun_alternative_scenario_still_logs_a_step(monkeypatch):
+    # Player has the ball but has no alternatives at all (cognitive cycle
+    # returns intention_type NINGUNA). NOTE: this cannot be constructed via a
+    # real board position in the current 40x25 field — even the four exact
+    # corners still leave 3 of the 8 conduccion directions in-bounds (verified
+    # empirically), so a lone carrier always resolves to CONDUCCION/CONSERVAR,
+    # never NINGUNA. The cognitive cycle is bypassed here, same technique as
+    # test_run_possession_stops_when_ball_changes_teams above, so this test
+    # targets run_possession's NINGUNA handling directly instead of relying on
+    # an unreachable game-state precondition.
+    passer = Player(id="p1", team="A", position=(0.0, 0.0), attributes=_attrs(),
+                     facing_rad=0.0, has_ball=True)
+    ball = Ball(position=(0.0, 0.0), owner_id="p1")
+    state = MatchState(players=[passer], ball=ball, tick=0, seed=1)
+    rng = random.Random(1)
+
+    def fake_cognitive_cycle(observer, state, rng):
+        return CognitiveCycleResult(
+            perceived=[], context=None, goals=[], pass_alternatives=[],
+            conduccion_alternatives=[], evaluated=[], chosen=None, intention_type="NINGUNA",
+        )
+
+    monkeypatch.setattr(simulation_module, "run_cognitive_cycle", fake_cognitive_cycle)
+
+    steps = run_possession(state, rng)
+
+    assert len(steps) == 1
+    assert steps[0]["intention_type"] == "NINGUNA"
