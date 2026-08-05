@@ -11,19 +11,27 @@ MAX_LOOP_REPEATS = 4
 MAX_CONDUCCION_STREAK = 6
 
 
+def _is_repeat(prev: Dict[str, Any], curr: Dict[str, Any]) -> bool:
+    if prev["actor_id"] != curr["actor_id"] or prev["action_type"] != curr["action_type"]:
+        return False
+    if curr["action_type"] == "PASE":
+        # For Pase specifically, the receiver still matters — passing to a
+        # different teammate each cycle is not a repeat. See Plan Iteracion
+        # 3 Cap. 5: "Pase repetido al mismo receptor."
+        return prev["action_key"] == curr["action_key"]
+    # CONDUCCION, CONSERVAR: actor+type match is enough — the specific
+    # direction/parameter no longer matters (Hallazgo 3 heredado, corrected
+    # here as precondition for measuring the Iteracion 3 hypothesis).
+    return True
+
+
 def detect_action_loop(history: List[Dict[str, Any]], max_consecutive: int = MAX_LOOP_REPEATS) -> bool:
     if len(history) < max_consecutive + 1:
         return False
 
     streak = 1
     for i in range(1, len(history)):
-        prev, curr = history[i - 1], history[i]
-        same = (
-            prev["actor_id"] == curr["actor_id"]
-            and prev["action_type"] == curr["action_type"]
-            and prev["action_key"] == curr["action_key"]
-        )
-        if same:
+        if _is_repeat(history[i - 1], history[i]):
             streak += 1
             if streak > max_consecutive:
                 return True
@@ -46,3 +54,18 @@ def max_conduccion_streak(history: List[Dict[str, Any]]) -> int:
         longest = max(longest, streak)
         prev_actor = entry["actor_id"] if entry["action_type"] == "CONDUCCION" else None
     return longest
+
+
+def trailing_conduccion_streak(history: List[Dict[str, Any]]) -> int:
+    streak = 0
+    for entry in reversed(history):
+        if entry["action_type"] != "CONDUCCION":
+            break
+        if streak == 0:
+            streak = 1
+            actor = entry["actor_id"]
+        elif entry["actor_id"] == actor:
+            streak += 1
+        else:
+            break
+    return streak
